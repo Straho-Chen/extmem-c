@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "extmem.h": "c",
+        "cstring": "c",
+        "__bit_reference": "c",
+        "__string": "c"
+    }
+}
