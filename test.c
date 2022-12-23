@@ -318,12 +318,11 @@ void initIndex(unsigned int groupNum, unsigned int blksPerGroup, unsigned int st
     writeBlock(blks[output]);
 }
 
-void indexBasedSelect(unsigned int indexAddr, unsigned int resultAddr)
+void indexBasedSelect(unsigned int indexAddr, unsigned int blksPerGroup, unsigned int indexBlksNum, unsigned int resultAddr)
 {
     printf("-----------------------------\n");
     printf("基于索引的关系选择算法 S.C=128:\n");
     printf("-----------------------------\n");
-    int blksPerGroup = buf.numAllBlk;
     unsigned char *blks[buf.numAllBlk];
     int index = 0;
     readBlock(&blks[index], indexAddr, 1);
@@ -346,7 +345,7 @@ void indexBasedSelect(unsigned int indexAddr, unsigned int resultAddr)
             break;
         }
         if (!getNextXY(&X, &Y, blks[index]))
-            if (!getNextBlock(&X, &Y, &blks[index], 162))
+            if (!getNextBlock(&X, &Y, &blks[index], indexAddr + indexBlksNum))
                 break;
         i++;
     }
@@ -669,15 +668,15 @@ int main(int argc, char **argv)
     printf("------------------\n");
     printf("构建关系R的索引文件:\n");
     printf("------------------\n");
-    initIndex(4, 4, 300, 150); // init R index
+    initIndex(8, 2, 300, 150); // init R index
 
     printf("------------------\n");
     printf("构建关系S的索引文件:\n");
     printf("------------------\n");
-    initIndex(8, 4, 500, 160); // init S index
+    initIndex(16, 2, 500, 160); // init S index
 
     buf.numIO = 0;
-    indexBasedSelect(160, 600);
+    indexBasedSelect(160, 2, 3, 600);
 
     // task 4
     sortMergeJoin(300, 500, 16, 32, 650);
