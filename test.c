@@ -306,21 +306,20 @@ void TPMMS(unsigned int addr_start, unsigned int addr_end)
  */
 void initIndex(unsigned int groupNum, unsigned int blksPerGroup, unsigned int startAddr, unsigned int outputAddr)
 {
-    unsigned char *blks[buf.numAllBlk];
-    int output = buf.numAllBlk - 1;
+    unsigned char *blks[groupNum + 1];
+    int output = groupNum;
     int X = -1;
     int Y = -1;
-    getBlock(&blks[output]);
+    int addr = -1;
+    write_blk_addr = outputAddr; // index output address
     for (int i = 0; i < groupNum; i++)
     {
         readBlock(&blks[i], startAddr + i * blksPerGroup, 1); // read first block in each group
         getXY(&X, &Y, blks[i], 0);
-        fillWithXY(X, startAddr + i * blksPerGroup, blks[output], i);
-    }
-    write_blk_addr = outputAddr; // index output address
-    writeBlock(blks[output]);
-    for (int i = 0; i < groupNum; i++)
+        fillOutputBlockWith1Item(&addr, X, startAddr + i * blksPerGroup, &blks[output]);
         freeBlock(blks[i]);
+    }
+    writeBlock(blks[output]);
 }
 
 void indexBasedSelect(unsigned int indexAddr, unsigned int resultAddr)
@@ -328,7 +327,6 @@ void indexBasedSelect(unsigned int indexAddr, unsigned int resultAddr)
     printf("-----------------------------\n");
     printf("基于索引的关系选择算法 S.C=128:\n");
     printf("-----------------------------\n");
-    int groupNum = 4;
     int blksPerGroup = buf.numAllBlk;
     unsigned char *blks[buf.numAllBlk];
     int index = 0;
@@ -337,9 +335,10 @@ void indexBasedSelect(unsigned int indexAddr, unsigned int resultAddr)
     int Y = -1;
     int startGroupNum = -1;
     int endGroupNum = -1;
-    for (int i = 0; i < groupNum; i++)
+    int i = 0;
+    getXY(&X, &Y, blks[index], i);
+    for (;;)
     {
-        getXY(&X, &Y, blks[index], i);
         if (X < 128)
         {
             startGroupNum = Y;
@@ -350,6 +349,10 @@ void indexBasedSelect(unsigned int indexAddr, unsigned int resultAddr)
             endGroupNum = Y;
             break;
         }
+        if (!getNextXY(&X, &Y, blks[index]))
+            if (!getNextBlock(&X, &Y, &blks[index], 162))
+                break;
+        i++;
     }
     freeBlock(blks[index]);
     int count = 0;
@@ -670,15 +673,15 @@ int main(int argc, char **argv)
     printf("------------------\n");
     printf("构建关系R的索引文件:\n");
     printf("------------------\n");
-    initIndex(2, 8, 300, 150); // init R index
+    initIndex(4, 4, 300, 150); // init R index
 
     printf("------------------\n");
     printf("构建关系S的索引文件:\n");
     printf("------------------\n");
-    initIndex(4, 8, 500, 151); // init S index
+    initIndex(8, 4, 500, 160); // init S index
 
     buf.numIO = 0;
-    indexBasedSelect(151, 600);
+    indexBasedSelect(160, 600);
 
     // task 4
     sortMergeJoin(300, 500, 16, 32, 650);
