@@ -65,8 +65,7 @@ void freeBlockInBuffer(unsigned char *blk, Buffer *buf)
     *(blk - 1) = BLOCK_AVAILABLE;
     for (bytePtr = blk; bytePtr < blk + buf->blkSize; bytePtr++)
         *bytePtr = 0;
-    if (buf->numFreeBlk < buf->numAllBlk)
-        buf->numFreeBlk++;
+    buf->numFreeBlk++;
 }
 
 int dropBlockOnDisk(unsigned int addr)

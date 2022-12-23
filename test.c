@@ -251,6 +251,7 @@ void TPMMS(unsigned int addr_start, unsigned int addr_end)
         }
     }
     int compare = groupNum;
+    getBlock(&blks[compare]);
     int output = compare + 1;
     for (int i = 0; i < groupNum; i++)
     {
@@ -259,7 +260,7 @@ void TPMMS(unsigned int addr_start, unsigned int addr_end)
         fillWithXY(X, Y, blks[compare], i);
     }
     write_blk_addr = wirte_addr_begin + 100; // wirte address for finally merged output
-    int p = 0;
+    int p = -1;
     int finished = 0;
     for (;;)
     {
@@ -269,13 +270,7 @@ void TPMMS(unsigned int addr_start, unsigned int addr_end)
         if (min_addr != 0 || X != 0)
         {
             getXY(&X, &Y, blks[compare], min_addr);
-            fillWithXY(X, Y, blks[output], p);
-            p++;
-            if (p == 7)
-            {
-                writeBlock(blks[output]);
-                p = 0;
-            }
+            fillOutputBlockWith1Item(&p, X, Y, &blks[output]);
             if (getNextXY(&X, &Y, blks[min_addr]))
             {
                 fillWithXY(X, Y, blks[compare], min_addr); // goto getMin
@@ -297,7 +292,8 @@ void TPMMS(unsigned int addr_start, unsigned int addr_end)
             }
         }
     }
-    for (int i = 0; i < buf.numAllBlk; i++)
+    freeBlock(blks[compare]);
+    for (int i = 0; i < groupNum; i++)
         freeBlock(blks[i]);
 }
 
@@ -688,6 +684,9 @@ int main(int argc, char **argv)
 
     // task 5
     sortIntersection(300, 500, 16, 32, 800);
+
+    // free
+    freeBuffer(&buf);
 
     return 0;
 }
