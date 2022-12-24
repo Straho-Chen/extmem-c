@@ -4,6 +4,7 @@
 
 Buffer buf; /* A buffer */
 unsigned int write_blk_addr;
+int pt = 0;
 
 void getBlock(unsigned char **blk)
 {
@@ -391,45 +392,8 @@ void indexBasedSelect(unsigned int indexAddr, unsigned int blksPerGroup, unsigne
  */
 void fillOutputBlockWith2Item(int *addr, int SX, int SY, int RX, int RY, unsigned char **blk)
 {
-    if (*addr == -1)
-    {
-        getBlock(blk);
-        *addr = 0;
-    }
-    if (*addr % 2 == 0)
-    {
-        if (*addr <= 4)
-        {
-            fillWithXY(SX, SY, *blk, *addr);     // fill S
-            fillWithXY(RX, RY, *blk, *addr + 1); // fill R
-            *addr += 2;
-        }
-        else if (*addr == 6)
-        {
-            fillWithXY(SX, SY, *blk, *addr); // fill S
-            writeBlock(*blk);
-            getBlock(blk);
-            *addr = 0;
-            fillWithXY(RX, RY, *blk, *addr); // fill R
-            *addr += 1;
-        }
-    }
-    else
-    {
-        if (*addr < 5)
-        {
-            fillWithXY(SX, SY, *blk, *addr);
-            fillWithXY(RX, RY, *blk, *addr + 1);
-            *addr += 2;
-        }
-        else
-        {
-            fillWithXY(SX, SY, *blk, *addr);
-            fillWithXY(RX, RY, *blk, *addr + 1);
-            writeBlock(*blk);
-            *addr = -1;
-        }
-    }
+    fillOutputBlockWith1Item(addr, SX, SY, blk);
+    fillOutputBlockWith1Item(addr, RX, RY, blk);
 }
 
 void rollBack(unsigned int p, unsigned char **blk, unsigned int startAddr)
@@ -644,6 +608,370 @@ void sortIntersection(unsigned int Raddr, unsigned int Saddr, unsigned int Rsize
     printf("S和R的交集有%d个元组。\n", count);
 }
 
+void fillWith0(unsigned char *blk, unsigned int addr)
+{
+    char str[5];
+    for (int i = 0; i < 4; i++)
+    {
+        *(blk + i + addr * 8) = 0;
+    }
+    for (int i = 0; i < 4; i++)
+    {
+        *(blk + i + addr * 8 + 4) = 0;
+    }
+}
+
+void removeXY(int X, int Y, unsigned char *blk)
+{
+    int FX, FY;
+    getXY(&FX, &FY, blk, 0);
+    int i = 0;
+    for (;;)
+    {
+        if (FX == X && FY == Y)
+        {
+            for (;;)
+            {
+                if (i < pt - 1)
+                {
+                    getNextXY(&FX, &FY, blk);
+                    fillWithXY(FX, FY, blk, i);
+                    i++;
+                }
+                else
+                {
+                    fillWith0(blk, i);
+                    pt--;
+                    break;
+                }
+            }
+            break;
+        }
+        if (i < pt)
+        {
+            getNextXY(&FX, &FY, blk);
+            i++;
+        }
+    }
+}
+
+void printTemp(unsigned char *blk)
+{
+    char str[5];
+    int X;
+    int Y;
+    for (int i = 0; i < 7; i++)
+    {
+        for (int k = 0; k < 4; k++)
+        {
+            str[k] = *(blk + i * 8 + k);
+        }
+        X = atoi(str);
+        for (int k = 0; k < 4; k++)
+        {
+            str[k] = *(blk + i * 8 + 4 + k);
+        }
+        Y = atoi(str);
+        printf("temp X = %d, Y = %d\n", X, Y);
+    }
+}
+
+int checkExist(int X, int Y, unsigned char *blk)
+{
+    int FX, FY;
+    for (int i = 0; i < 8; i++)
+    {
+        getXY(&FX, &FY, blk, i);
+        if (FX == X && FY == Y)
+        {
+            removeXY(FX, FY, blk);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+void sortUnion(unsigned int Raddr, unsigned int Saddr, unsigned int Rsize, unsigned int Ssize, unsigned int resultAddr)
+{
+    printf("-----------------------\n");
+    printf("基于排序的集合并操作算法:\n");
+    printf("-----------------------\n");
+    unsigned char *blks[3];
+    unsigned char *same;
+    getBlock(&same);
+    int SX = -1;
+    int SY = -1;
+    int RX = -1;
+    int RY = -1;
+    int count = 0;
+    // read first block of S
+    readBlock(&blks[0], Saddr, 0);
+    getXY(&SX, &SY, blks[0], 0);
+    // read first block of R
+    readBlock(&blks[1], Raddr, 0);
+    getXY(&RX, &RY, blks[1], 0);
+    write_blk_addr = resultAddr;
+    int addr = -1;
+    unsigned int ps = 0, pr = 0;
+    for (;;)
+    {
+        if (SX > RX)
+        {
+            if (!checkExist(RX, RY, same))
+            {
+                count++;
+                fillOutputBlockWith1Item(&addr, RX, RY, &blks[2]);
+            }
+            if (!getNextXY(&RX, &RY, blks[1]))
+                if (!getNextBlock(&RX, &RY, &blks[1], Raddr + Rsize))
+                    break;
+            pr++;
+        }
+        else if (SX < RX)
+        {
+            if (!checkExist(SX, SY, same))
+            {
+                count++;
+                fillOutputBlockWith1Item(&addr, SX, SY, &blks[2]);
+            }
+            if (!getNextXY(&SX, &SY, blks[0]))
+                if (!getNextBlock(&SX, &SY, &blks[0], Saddr + Ssize))
+                    break;
+            ps++;
+        }
+        else
+        {
+            int is_write = 0;
+            for (;;)
+            {
+                if (SX != RX)
+                {
+                    rollBack(pr, &blks[1], Raddr);
+                    getXY(&RX, &RY, blks[1], pr % 7);
+                    break;
+                }
+                if (SY == RY)
+                {
+                    count++;
+                    fillOutputBlockWith1Item(&addr, SX, SY, &blks[2]);
+                    is_write = 1;
+                    fillWithXY(SX, SY, same, pt);
+                    pt++;
+                    rollBack(pr, &blks[1], Raddr);
+                    getXY(&RX, &RY, blks[1], pr % 7);
+                    break;
+                }
+                if (!getNextXY(&RX, &RY, blks[1]))
+                    if (!getNextBlock(&RX, &RY, &blks[1], Raddr + Rsize))
+                    {
+                        rollBack(pr, &blks[1], Raddr);
+                        getXY(&RX, &RY, blks[1], pr % 7);
+                        break;
+                    }
+            }
+            if (!is_write)
+            {
+                if (!checkExist(SX, SY, same))
+                {
+                    count++;
+                    fillOutputBlockWith1Item(&addr, SX, SY, &blks[2]);
+                }
+            }
+            if (!getNextXY(&SX, &SY, blks[0]))
+                if (!getNextBlock(&SX, &SY, &blks[0], Saddr + Ssize))
+                    break;
+            ps++;
+            is_write = 0;
+            for (;;)
+            {
+                if (SX != RX)
+                {
+                    rollBack(ps, &blks[0], Saddr);
+                    getXY(&SX, &SY, blks[0], ps % 7);
+                    break;
+                }
+                if (SY == RY)
+                {
+                    count++;
+                    fillOutputBlockWith1Item(&addr, RX, RY, &blks[2]);
+                    is_write = 1;
+                    fillWithXY(RX, RY, same, pt);
+                    pt++;
+                    rollBack(ps, &blks[0], Saddr);
+                    getXY(&SX, &SY, blks[0], ps % 7);
+                    break;
+                }
+                if (!getNextXY(&SX, &SY, blks[0]))
+                    if (!getNextBlock(&SX, &SY, &blks[0], Saddr + Ssize))
+                    {
+                        rollBack(ps, &blks[0], Saddr);
+                        getXY(&SX, &SY, blks[0], ps % 7);
+                        break;
+                    }
+            }
+            if (!is_write)
+            {
+                if (!checkExist(RX, RY, same))
+                {
+                    count++;
+                    fillOutputBlockWith1Item(&addr, RX, RY, &blks[2]);
+                }
+            }
+            if (!getNextXY(&RX, &RY, blks[1]))
+                if (!getNextBlock(&RX, &RY, &blks[1], Raddr + Rsize))
+                    break;
+            pr++;
+        }
+    }
+    while (ps < Ssize * 7)
+    {
+        if (!checkExist(SX, SY, same))
+        {
+            count++;
+            fillOutputBlockWith1Item(&addr, SX, SY, &blks[2]);
+        }
+        if (!getNextXY(&SX, &SY, blks[0]))
+            if (!getNextBlock(&SX, &SY, &blks[0], Saddr + Ssize))
+                break;
+        ps++;
+    }
+    writeBlock(blks[2]);
+    freeBlock(same);
+    for (int i = 0; i < 2; i++)
+        freeBlock(blks[i]);
+    printf("S和R的并集有%d个元组。\n", count);
+}
+
+void sortDiff(unsigned int Raddr, unsigned int Saddr, unsigned int Rsize, unsigned int Ssize, unsigned int resultAddr)
+{
+    printf("----------------------------\n");
+    printf("基于排序的集合差操作算法 S-R :\n");
+    printf("----------------------------\n");
+    unsigned char *blks[3];
+    unsigned char *same;
+    getBlock(&same);
+    int SX = -1;
+    int SY = -1;
+    int RX = -1;
+    int RY = -1;
+    int count = 0;
+    // read first block of S
+    readBlock(&blks[0], Saddr, 0);
+    getXY(&SX, &SY, blks[0], 0);
+    // read first block of R
+    readBlock(&blks[1], Raddr, 0);
+    getXY(&RX, &RY, blks[1], 0);
+    write_blk_addr = resultAddr;
+    int addr = -1;
+    unsigned int ps = 0, pr = 0;
+    for (;;)
+    {
+        if (SX > RX)
+        {
+            if (!getNextXY(&RX, &RY, blks[1]))
+                if (!getNextBlock(&RX, &RY, &blks[1], Raddr + Rsize))
+                    break;
+            pr++;
+        }
+        else if (SX < RX)
+        {
+            if (!checkExist(SX, SY, same))
+            {
+                count++;
+                fillOutputBlockWith1Item(&addr, SX, SY, &blks[2]);
+            }
+            if (!getNextXY(&SX, &SY, blks[0]))
+                if (!getNextBlock(&SX, &SY, &blks[0], Saddr + Ssize))
+                    break;
+            ps++;
+        }
+        else
+        {
+            int has_same = 0;
+            for (;;)
+            {
+                if (SX != RX)
+                {
+                    rollBack(pr, &blks[1], Raddr);
+                    getXY(&RX, &RY, blks[1], pr % 7);
+                    break;
+                }
+                if (SY == RY)
+                {
+                    has_same = 1;
+                    rollBack(pr, &blks[1], Raddr);
+                    getXY(&RX, &RY, blks[1], pr % 7);
+                    break;
+                }
+                if (!getNextXY(&RX, &RY, blks[1]))
+                    if (!getNextBlock(&RX, &RY, &blks[1], Raddr + Rsize))
+                    {
+                        rollBack(pr, &blks[1], Raddr);
+                        getXY(&RX, &RY, blks[1], pr % 7);
+                        break;
+                    }
+            }
+            if (!has_same)
+            {
+                if (!checkExist(SX, SY, same))
+                {
+                    count++;
+                    fillOutputBlockWith1Item(&addr, SX, SY, &blks[2]);
+                }
+            }
+            if (!getNextXY(&SX, &SY, blks[0]))
+                if (!getNextBlock(&SX, &SY, &blks[0], Saddr + Ssize))
+                    break;
+            ps++;
+            for (;;)
+            {
+                if (SX != RX)
+                {
+                    rollBack(ps, &blks[0], Saddr);
+                    getXY(&SX, &SY, blks[0], ps % 7);
+                    break;
+                }
+                if (SY == RY)
+                {
+                    fillWithXY(RX, RY, same, pt);
+                    pt++;
+                    rollBack(ps, &blks[0], Saddr);
+                    getXY(&SX, &SY, blks[0], ps % 7);
+                    break;
+                }
+                if (!getNextXY(&SX, &SY, blks[0]))
+                    if (!getNextBlock(&SX, &SY, &blks[0], Saddr + Ssize))
+                    {
+                        rollBack(ps, &blks[0], Saddr);
+                        getXY(&SX, &SY, blks[0], ps % 7);
+                        break;
+                    }
+            }
+            if (!getNextXY(&RX, &RY, blks[1]))
+                if (!getNextBlock(&RX, &RY, &blks[1], Raddr + Rsize))
+                    break;
+            pr++;
+        }
+    }
+    while (ps < Ssize * 7)
+    {
+        if (!checkExist(SX, SY, same))
+        {
+            count++;
+            fillOutputBlockWith1Item(&addr, SX, SY, &blks[2]);
+        }
+        if (!getNextXY(&SX, &SY, blks[0]))
+            if (!getNextBlock(&SX, &SY, &blks[0], Saddr + Ssize))
+                break;
+        ps++;
+    }
+    writeBlock(blks[2]);
+    freeBlock(same);
+    for (int i = 0; i < 2; i++)
+        freeBlock(blks[i]);
+    printf("S-R集有%d个元组。\n", count);
+}
+
 int main(int argc, char **argv)
 {
     /* Initialize the buffer */
@@ -683,6 +1011,10 @@ int main(int argc, char **argv)
 
     // task 5
     sortIntersection(300, 500, 16, 32, 800);
+
+    sortUnion(300, 500, 16, 32, 805);
+
+    sortDiff(300, 500, 16, 32, 900);
 
     // free
     freeBuffer(&buf);

@@ -1,17 +1,17 @@
 CC=gcc
 CFLAGS = -Og
 
-.PHONY: default test extmem
+.PHONY: default main extmem
 
-default: test extmem
-	$(CC) $(CFLAGS) ./out/test.o ./out/extmem.o -o test
+default: main extmem
+	$(CC) $(CFLAGS) ./out/main.o ./out/extmem.o -o main
 
-test: test.c
-	$(CC) $(CFLAGS) -c test.c -o ./out/test.o
+main: main.c
+	$(CC) $(CFLAGS) -c main.c -o ./out/main.o
 
 extmem: extmem.c
 	$(CC) $(CFLAGS) -c extmem.c -o ./out/extmem.o
 
 clean:
 	rm ./out/*.o
-	rm test
+	rm main
